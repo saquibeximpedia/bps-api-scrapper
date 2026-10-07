@@ -149,8 +149,13 @@ async function runExtraction(config, CSV_HEADERS) {
     if (isTerminating) return;
     isTerminating = true;
     console.log("\n\nINFO : Interrupted. Saving checkpoint...");
-    tracker.save();
-    process.exit(130);
+    if (tracker) {
+      try {
+        tracker.save();
+      } catch {}
+    }
+    console.log("INFO : Checkpoint saved. Exiting cleanly.");
+    process.exit(0);
   };
   process.once("SIGINT", saveAndExit);
   process.once("SIGTERM", saveAndExit);
@@ -164,16 +169,25 @@ async function runExtraction(config, CSV_HEADERS) {
   const worker = async () => {
     while (activeIndex < tasks.length && !isTerminating) {
       const task = tasks[activeIndex++];
-      const res = await fetchEximData(
-        task.sumber,
-        task.hsCode,
-        task.year,
-        config.apiKey,
-        config.maxRetries,
-      );
+      if (!task) break;
+
+      let res;
+      try {
+        res = await fetchEximData(
+          task.sumber,
+          task.hsCode,
+          task.year,
+          config.apiKey,
+          config.maxRetries,
+        );
+      } catch {
+        if (isTerminating) break;
+      }
+
+      if (isTerminating) break;
 
       processed++;
-      if (res.status === "OK") {
+      if (res && res.status === "OK") {
         let records = res.records;
 
         // Optional month filter applied in memory if user selected specific months
@@ -208,7 +222,7 @@ async function runExtraction(config, CSV_HEADERS) {
         );
       }
 
-      if (config.delayMs > 0) await sleep(config.delayMs);
+      if (config.delayMs > 0 && !isTerminating) await sleep(config.delayMs);
     }
   };
 
@@ -217,15 +231,30 @@ async function runExtraction(config, CSV_HEADERS) {
     () => worker(),
   );
   await Promise.all(pool);
-  tracker.save();
+
+  if (!isTerminating) {
+    tracker.save();
+  }
 
   return activeIndex >= tasks.length;
 }
 
 (async function main() {
+  process.on("unhandledRejection", (err) => {
+    // Suppress noise on abrupt exit
+    if (process.exitCode !== undefined) return;
+  });
+
   console.log("INFO : Scrapper Started.");
 
-  const config = await loadConfig();
+  let config;
+  try {
+    config = await loadConfig();
+  } catch (err) {
+    console.error(`\nERROR: Configuration error: ${err.message}`);
+    process.exit(1);
+  }
+
   let restartCount = 0;
 
   while (restartCount <= config.maxProcessRestarts) {

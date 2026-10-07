@@ -110,6 +110,11 @@ async function loadConfig() {
       output: process.stdout,
     });
 
+    rl.on("SIGINT", () => {
+      console.log("\nINFO : Interrupted by user. Exiting...");
+      process.exit(0);
+    });
+
     try {
       // Input File
       const inputAns = await ask(
