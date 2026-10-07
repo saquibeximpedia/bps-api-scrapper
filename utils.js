@@ -40,7 +40,7 @@ function csvEscape(val) {
 }
 
 async function runHealthCheck(config) {
-  process.stdout.write("🔍 Running pre-flight BPS API health check... ");
+  process.stdout.write("INFO: Running pre-flight BPS API health check... ");
   const probeHs = "01012100";
   const url = `https://webapi.bps.go.id/v1/api/dataexim/sumber/1/kodehs/${probeHs}/jenishs/2/tahun/2023/periode/1/key/${config.apiKey}`;
 
@@ -74,9 +74,9 @@ async function runHealthCheck(config) {
       );
     }
 
-    console.log("✅ [PASSED]");
+    console.log("INFO: Health Check Passed.\n");
   } catch (err) {
-    console.log("❌ [FAILED]");
+    console.log("ERROR: Health Check Failed.");
     throw err.name === "AbortError"
       ? new Error("Health check timed out (10s). BPS unreachable.")
       : err;
@@ -100,7 +100,9 @@ class ProgressTracker {
         for (const item of data.completed) this.completed.add(item);
       }
     } catch {
-      console.warn("⚠️ Progress file unreadable, starting fresh checkpoint.");
+      console.warn(
+        "WARNING: Progress file unreadable, starting fresh checkpoint.",
+      );
     }
   }
 
@@ -125,7 +127,7 @@ class ProgressTracker {
       fs.renameSync(tmp, this.filePath);
       this.dirty = false;
     } catch (err) {
-      console.error(`⚠️ Failed to save checkpoint: ${err.message}`);
+      console.error(`ERROR: Failed to save checkpoint: ${err.message}`);
     }
   }
 }

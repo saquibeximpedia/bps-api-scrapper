@@ -2,19 +2,6 @@ const path = require("path");
 const fs = require("fs");
 const readline = require("readline/promises");
 
-const CSV_HEADERS = [
-  "Trade Type",
-  "HS Code",
-  "HS Description",
-  "Month",
-  "Year",
-  "Origin Country",
-  "Destination Country",
-  "Port",
-  "Net Weight (kg)",
-  "Value (USD)",
-];
-
 // readline helper
 async function ask(rl, promptText, defaultValue) {
   const displayDefault =
@@ -51,8 +38,28 @@ async function loadConfig() {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--mode" && args[i + 1]) {
-      const m = args[++i].toUpperCase();
-      config.modes = m === "ALL" ? ["EXPORT", "IMPORT"] : [m];
+      const rawMode = args[++i];
+      const upperMode = rawMode.toUpperCase().trim();
+      const parsedModes =
+        upperMode === "ALL"
+          ? ["EXPORT", "IMPORT"]
+          : upperMode
+              .split(",")
+              .map((m) => m.trim())
+              .filter(Boolean);
+
+      const invalidModes = parsedModes.filter(
+        (m) => !["EXPORT", "IMPORT"].includes(m),
+      );
+
+      if (parsedModes.length === 0 || invalidModes.length > 0) {
+        console.error(
+          `Invalid trade mode: ${rawMode}. Valid options: ALL, EXPORT, IMPORT`,
+        );
+        process.exit(1);
+      }
+
+      config.modes = Array.from(new Set(parsedModes));
     } else if (arg === "--years" && args[i + 1]) {
       config.years = args[++i].split(",").map((y) => y.trim());
     } else if (arg === "--months" && args[i + 1]) {
@@ -119,23 +126,27 @@ async function loadConfig() {
         config.modes.join(","),
       );
 
-      const upperMode = modeAns.toUpperCase();
-
-      config.modes =
+      const upperMode = modeAns.toUpperCase().trim();
+      const parsedModes =
         upperMode === "ALL"
           ? ["EXPORT", "IMPORT"]
-          : upperMode.split(",").map((m) => m.trim());
+          : upperMode
+              .split(",")
+              .map((m) => m.trim())
+              .filter(Boolean);
 
-      console.log(config.modes, typeof config.modes);
-      if (
-        config.modes !== "" &&
-        !["ALL", "EXPORT", "IMPORT"].includes(config.modes)
-      ) {
+      const invalidModes = parsedModes.filter(
+        (m) => !["EXPORT", "IMPORT"].includes(m),
+      );
+
+      if (parsedModes.length === 0 || invalidModes.length > 0) {
         console.error(
-          `Invalid trade mode: ${config.modes}. Valid options: ALL, EXPORT, IMPORT`,
+          `Invalid trade mode: ${modeAns}. Valid options: ALL, EXPORT, IMPORT`,
         );
         process.exit(1);
       }
+
+      config.modes = Array.from(new Set(parsedModes));
 
       // Target Years
       const yearsAns = await ask(
@@ -159,7 +170,7 @@ async function loadConfig() {
       // Concurrency
       const concAns = await ask(
         rl,
-        "Worker Concurrency (threads, 🚨 Do not set to more than 10)",
+        "Worker Concurrency (threads, [Warning] Do not set to more than 10)",
         String(config.concurrency),
       );
       config.concurrency = Math.max(1, parseInt(concAns, 10) || 5);
@@ -174,7 +185,7 @@ async function loadConfig() {
       // Output Directory
       const outAns = await ask(
         rl,
-        "📁 Output Directory",
+        "Output Directory",
         path.relative(process.cwd(), config.outputDir),
       );
       config.outputDir = path.resolve(process.cwd(), outAns);
@@ -182,7 +193,7 @@ async function loadConfig() {
       // Resume from checkpoint
       const resumeAns = await ask(
         rl,
-        "🔄 Resume from last checkpoint if available? (y/n)",
+        "Resume from last checkpoint if available? (y/n)",
         config.resume ? "y" : "n",
       );
       config.resume = resumeAns.toLowerCase().startsWith("y");
@@ -193,7 +204,7 @@ async function loadConfig() {
     }
   }
 
-  return { config, CSV_HEADERS };
+  return config;
 }
 
 module.exports = { loadConfig };

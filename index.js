@@ -8,6 +8,7 @@ const {
   ProgressTracker,
   CsvStreamWriter,
 } = require("./utils");
+const { CSV_HEADERS } = require("./constants");
 
 async function fetchEximData(sumber, hsCode, year, apiKey, maxRetries = 3) {
   const url = `https://webapi.bps.go.id/v1/api/dataexim/sumber/${sumber}/kodehs/${hsCode}/jenishs/2/tahun/${year}/periode/1/key/${apiKey}`;
@@ -124,22 +125,22 @@ async function runExtraction(config, CSV_HEADERS) {
   const monthFilterActive = config.months && config.months.length > 0;
 
   console.log(
-    `📁 Input File:   ${config.inputFile} (${hsCodes.length.toLocaleString()} codes)`,
+    `Input File:   ${config.inputFile} (${hsCodes.length.toLocaleString()} codes)`,
   );
-  console.log(`🎯 Modes:        [${config.modes.join(", ")}]`);
-  console.log(`📅 Years:        [${config.years.join(", ")}]`);
+  console.log(`Modes:        [${config.modes.join(", ")}]`);
+  console.log(`Years:        [${config.years.join(", ")}]`);
   console.log(
-    `🗓️  Month Filter: [${monthFilterActive ? config.months.join(", ") : "ALL (Unfiltered)"}]`,
-  );
-  console.log(
-    `⚡ Concurrency:  ${config.concurrency} | Delay: ${config.delayMs}ms`,
+    `Month Filter: [${monthFilterActive ? config.months.join(", ") : "ALL (Unfiltered)"}]`,
   );
   console.log(
-    `⏩ Checkpoint:   ${skipped.toLocaleString()} completed | ${pending.toLocaleString()} remaining\n`,
+    `Concurrency:  ${config.concurrency} | Delay: ${config.delayMs}ms`,
+  );
+  console.log(
+    `Checkpoint:   ${skipped.toLocaleString()} completed | ${pending.toLocaleString()} remaining\n`,
   );
 
   if (pending === 0) {
-    console.log("✨ All queries are already completed.");
+    console.log("INFO : All queries are already completed.");
     return true;
   }
 
@@ -147,7 +148,7 @@ async function runExtraction(config, CSV_HEADERS) {
   const saveAndExit = () => {
     if (isTerminating) return;
     isTerminating = true;
-    console.log("\n\n🛑 Interrupted. Saving checkpoint...");
+    console.log("\n\nINFO : Interrupted. Saving checkpoint...");
     tracker.save();
     process.exit(130);
   };
@@ -203,7 +204,7 @@ async function runExtraction(config, CSV_HEADERS) {
         const pct = ((processed / pending) * 100).toFixed(1);
 
         process.stdout.write(
-          `\r⏳ [${pct}%] ${processed}/${pending} queries | Records: ${recordsFound.toLocaleString()} | Err: ${errors} | ${rate} req/s | ETA: ${etaMin}m  `,
+          `\rINFO : [${pct}%] ${processed}/${pending} queries | Records: ${recordsFound.toLocaleString()} | Err: ${errors} | ${rate} req/s | ETA: ${etaMin}m  `,
         );
       }
 
@@ -223,33 +224,34 @@ async function runExtraction(config, CSV_HEADERS) {
 
 (async function main() {
   console.log("INFO : Scrapper Started.");
-  // Load interactive prompt or CLI flags
-  const { config, CSV_HEADERS } = await loadConfig();
 
+  const config = await loadConfig();
   let restartCount = 0;
 
   while (restartCount <= config.maxProcessRestarts) {
     try {
       const done = await runExtraction(config, CSV_HEADERS);
       if (done) {
-        console.log("\n\n✅ Job completed successfully.");
+        console.log("\n\nINFO: Job completed successfully.");
         process.exit(0);
       }
     } catch (err) {
       restartCount++;
-      console.error(`\n\n💥 Encountered error: ${err.message}`);
+      console.error(`\n\nERROR: Encountered error: ${err.message}`);
 
       if (!config.autoRestart || restartCount > config.maxProcessRestarts) {
-        console.error(`🚨 Halting. (${restartCount - 1} restarts attempted).`);
+        console.error(
+          `ERROR: Halting. (${restartCount - 1} restarts attempted).`,
+        );
         process.exit(1);
       }
 
       const backoffSec = Math.min(30, Math.pow(2, restartCount) * 2);
       console.log(
-        `🔄 Auto-restart ${restartCount}/${config.maxProcessRestarts} scheduled in ${backoffSec}s...`,
+        `INFO: Auto-restart ${restartCount}/${config.maxProcessRestarts} scheduled in ${backoffSec}s...`,
       );
       await sleep(backoffSec * 1000);
-      console.log("🚀 Resuming from saved progress file...\n");
+      console.log("INFO: Resuming from saved progress file...\n");
     }
   }
 })();
